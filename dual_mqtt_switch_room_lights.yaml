@@ -1,0 +1,162 @@
+blueprint:
+  name: Dual MQTT Switch - Room Lights
+  description: >
+    This blueprint allows you to control multiple lights using a dual-button MQTT switch.
+    Each button can toggle one or more lights and increase brightness progressively on long press.
+    The left and right buttons each control a configurable group of lights. Pressing both buttons
+    simultaneously toggles all configured lights. Long pressing either button gradually increases
+    brightness by steps of 25%, five times, with a short delay between steps.
+
+    Ideal for bedside controls, room lamps, or any scenario where you'd like a simple tactile control
+    over multiple lights with intuitive dimming.
+
+    Supported button actions:
+    - Single Left: Toggle left lights (custom brightness if turning on)
+    - Single Right: Toggle right lights (custom brightness if turning on)
+    - Single Both: Toggle all lights (custom brightness if turning on)
+    - Hold Left: Gradually increase brightness on left lights
+    - Hold Right: Gradually increase brightness on right lights
+
+  domain: automation
+  input:
+    mqtt_device:
+      name: MQTT Switch
+      description: Select the MQTT switch device with dual-button actions.
+      selector:
+        device:
+          integration: mqtt
+
+    left_light:
+      name: Left Light
+      description: One or more lights to control with the left button.
+      selector:
+        target:
+          entity:
+            domain: light
+
+    right_light:
+      name: Right Light
+      description: One or more lights to control with the right button.
+      selector:
+        target:
+          entity:
+            domain: light
+
+    left_brightness:
+      name: Left Light Brightness
+      description: Brightness level when turning on left lights (1–100).
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+          mode: slider
+
+    right_brightness:
+      name: Right Light Brightness
+      description: Brightness level when turning on right lights (1–100).
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+          mode: slider
+
+trigger:
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: single_left
+    id: gauche_simple
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: single_right
+    id: droite_simple
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: single_both
+    id: double_simple
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: hold_left
+    id: gauche_long
+  - platform: device
+    device_id: !input mqtt_device
+    domain: mqtt
+    type: action
+    subtype: hold_right
+    id: droite_long
+
+condition: []
+
+mode: single
+
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: gauche_simple
+        sequence:
+          - service: light.toggle
+            target: !input left_light
+            data:
+              brightness_pct: !input left_brightness
+
+      - conditions:
+          - condition: trigger
+            id: droite_simple
+        sequence:
+          - service: light.toggle
+            target: !input right_light
+            data:
+              brightness_pct: !input right_brightness
+
+      - conditions:
+          - condition: trigger
+            id: double_simple
+        sequence:
+          - service: light.toggle
+            target: !input left_light
+            data:
+              brightness_pct: !input left_brightness
+          - service: light.toggle
+            target: !input right_light
+            data:
+              brightness_pct: !input right_brightness
+
+      - conditions:
+          - condition: trigger
+            id: gauche_long
+        sequence:
+          - repeat:
+              count: 5
+              sequence:
+                - service: light.turn_on
+                  data_template:
+                    brightness_step_pct: 25
+                  target: !input left_light
+                - delay:
+                    milliseconds: 300
+
+      - conditions:
+          - condition: trigger
+            id: droite_long
+        sequence:
+          - repeat:
+              count: 5
+              sequence:
+                - service: light.turn_on
+                  data_template:
+                    brightness_step_pct: 25
+                  target: !input right_light
+                - delay:
+                    milliseconds: 300
